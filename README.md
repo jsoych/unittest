@@ -1,4 +1,4 @@
-![License: MIT](https://shields.io)
+[![License: MIT](https://shields.io)](LICENSE)
 
 # Unittest C Framework
 
