@@ -1,0 +1,7 @@
+# Build outputs
+libunittest.a
+build/
+
+# Doxygen outputs
+html/
+latex/
