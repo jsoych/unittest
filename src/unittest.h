@@ -43,7 +43,7 @@ typedef void (*unittest_fn)(UnittestResult *);
 /*
  * Returns the default testing options -1 (no timeout) and UNITTEST_DEFAULT.
  */
-unittest_opts_t unittest_opts_default();
+unittest_opts_t unittest_opts_default(void);
 
 /*
  * Destroys the UnittestResult and all of its resources.

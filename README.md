@@ -1,22 +1,32 @@
+![License: MIT](https://shields.io)
+
 # Unittest C Framework
 
 This repository includes a small C testing framework intentionally modeled after Python’s `unittest` module. The goal is to keep tests **easy to write**, **easy to read**, and **fast to run**.
 
 ## Quick Start
 
-* Report a bug?
 * Install
+* Uninstall
 * Examples
 
-## Installation
+## Install
 
-Clone repo
-Make
-Install (Optional)
+1. **Clone the repo**: `git clone https://github.com/jsoych/unittest.git`
+
+2. **Change directory to unittest**: `cd unittest`
+
+3. **Build unittest library**: `make`
+
+4. **Install (optional)**: `make install`
+
+## Uninstall
+
+1. **Change to unittest repo**: `cd unittest`
+
+2. **Uninstall**: `make uninstall`
 
 ## Examples
-
-how to include a code snippet?
 
 ### Test
 
@@ -24,66 +34,66 @@ how to include a code snippet?
 #include <stdlib.h>
 #include <unittest/unittest.h>
 
-void test_case(UnittestResult* result) {
-    /* create array */
-    int *arr = malloc(3 * sizeof(int));
-    if (!arr) {
-        unittest_result_err(result, "failed to create array");
-        return;
-    }
+void test_case(UnittestResult *result)
+{
+	/* create array */
+	int size = 3;
+	int *arr = malloc(size * sizeof(int));
+	if (!arr) {
+		unittest_result_err(result, "failed to create array");
+		return;
+	}
 
-    /* init array */
-    for (int i = 0; i < 3; i++) {
-        arr[i] = i;
-    }
+	/* init array */
+	for (int i = 0; i < size; i++) {
+		arr[i] = i;
+	}
 
-    /* sum array values */
-    int sum = 0;
-    for (int i = 0; i < 5 /* index out of bounds */; i++) {
-        sum += arr[i];
-    }
+	/* sum array values */
+	int sum = 0;
+	for (int i = 0; i < size; i++) {
+		sum += arr[i];
+	}
 
-    if (sum != 3) {
-        unittest_result_fail(result, "unexpected sum (%d)", sum);
-        free(arr);
-        return;
-    }
-    unittest_result_ok(result);
-    free(arr);
+	if (sum != 3) {
+		unittest_result_fail(result, "unexpected sum (%d)", sum);
+		free(arr);
+		return;
+	}
+	unittest_result_ok(result);
+	free(arr);
 }
 
-int main() {
-    /* create test */
-    Unittest *test = unittest_create_test("example", test_case);
+int main()
+{
+	/* create test */
+	Unittest *test = unittest_create_test("example", test_case);
 
-    /* set timeout to 1s and output verbosity to quiet */
-    unittest_opts_t opts = {
-        .timeout_ms = 1000,
-        .level = UNITTEST_QUIET
-    };
+	/* set timeout to 1s and output verbosity to quiet */
+	unittest_opts_t opts = { .timeout_ms = 1000, .level = UNITTEST_QUIET };
 
-    /* run test */
-    int status;
-    UnittestResult *result = unittest_run(test, &opts, &status);
-    if (status != 0) {
-        unittest_destroy(test);
-        return 1;
-    }
+	/* run test */
+	int status;
+	UnittestResult *result = unittest_run(test, &opts, &status);
+	if (status != 0) {
+		unittest_destroy(test);
+		return 1;
+	}
 
-    /* print test result */
-    unittest_print_result(test, result, UNITTEST_VERBOSE);
+	/* print test result */
+	unittest_print_result(test, result, UNITTEST_VERBOSE);
 
-    /* cleanup and exit */
-    unittest_result_destroy(result);
-    unittest_destroy(test);
-    return 0;
+	/* cleanup and exit */
+	unittest_result_destroy(result);
+	unittest_destroy(test);
+	return 0;
 }
 
 ```
 
-```text
-[jsoych@machine ~]# gcc -lunittest test.c -o test 
-[jsoych@machine ~]# ./test 
+```bash
+gcc -lunittest test.c -o test 
+./test 
 .
 ======================================================================
 ok: example
@@ -93,59 +103,55 @@ Ran test in 0.000s
 
 ### Suite
 
-The following example demostrates how to create and run a suite of tests with default values.
-
 ```c
 #include <stdlib.h>
 #include <unittest/unittest.h>
 
 void test_case_1(UnittestResult *result)
 {
-    int sum = 1 + 3;
-    if (sum != 3)
-    {
-        unittest_result_fail(result, "unexpected value (%d)", sum);
-        return;
-    }
-    unittest_result_ok(result);
+	int sum = 1 + 3;
+	if (sum != 3) {
+		unittest_result_fail(result, "unexpected value (%d)", sum);
+		return;
+	}
+	unittest_result_ok(result);
 }
 
 void test_case_2(UnittestResult *result)
 {
-    void *ptr;
-    free(ptr); /* invalid free */
+	void *ptr;
+	free(ptr); /* invalid free */
 }
 
 int main()
 {
-    /* create suite */
-    Unittest *suite = unittest_create_suite("example");
+	/* create suite */
+	Unittest *suite = unittest_create_suite("example");
 
-    /* add tests to the suite */
-    (void)unittest_add_test(suite, "test_1", test_case_1);
-    (void)unittest_add_test(suite, "test_2", test_case_2);
+	/* add tests to the suite */
+	(void)unittest_add_test(suite, "test_1", test_case_1);
+	(void)unittest_add_test(suite, "test_2", test_case_2);
 
-    /* run suite */
-    UnittestResult *result = unittest_run(
-        suite,
-        NULL /* use default options */,
-        NULL /* ignore run status */
-    );
+	/* run suite */
+	UnittestResult *result = unittest_run(suite,
+					      NULL /* use default options */,
+					      NULL /* ignore run status */
+	);
 
-    /* print suite result */
-    unittest_print_result(suite, result, UNITTEST_DEFAULT);
+	/* print suite result */
+	unittest_print_result(suite, result, UNITTEST_DEFAULT);
 
-    /* cleanup and exit */
-    unittest_result_destroy(result);
-    unittest_destroy(suite);
-    return 0;
+	/* cleanup and exit */
+	unittest_result_destroy(result);
+	unittest_destroy(suite);
+	return 0;
 }
 
 ```
 
-```text
-[[jsoych@machine ~]# gcc -lunittest suite.c -o suite
-[[jsoych@machine ~]# ./suite
+```bash
+gcc -lunittest suite.c -o suite
+./suite
 FE
 ======================================================================
 Ran 2 tests in 0.000s
