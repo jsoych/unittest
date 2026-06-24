@@ -2,23 +2,33 @@
 #define UNITTEST_H
 
 #define DLINE \
-	"\n======================================================================"
+	"\n\n======================================================================"
 #define HLINE \
 	"\n----------------------------------------------------------------------"
 
 /* Verbosity levels configure the printed run and result outputs. */
-typedef enum {
+enum
+{
 	UNITTEST_DEFAULT = 0,
 	UNITTEST_QUIET,
 	UNITTEST_VERBOSE,
 	UNITTEST_DEBUG
-} unittest_verbosity_t;
+};
+
+enum
+{
+	UNITTEST_OK = 0,
+	UNITTEST_FAIL,
+	UNITTEST_ERROR,
+	UNITTEST_SYSERR
+};
 
 /* Options changes the behaviour of the running test. */
-typedef struct {
+struct unittest_opts
+{
 	int timeout_ms; /* Set to -1 for no timeout */
-	unittest_verbosity_t level;
-} unittest_opts_t;
+	int level;
+};
 
 /**
  * Unittest is the abstract object of testing. It organizes the test into a
@@ -41,9 +51,29 @@ typedef struct UnittestResult UnittestResult;
 typedef void (*unittest_fn)(UnittestResult *);
 
 /*
+ * Sets up the testing framework with its default values.
+ */
+int unittest_setup(void);
+
+/*
+ * Tears down the testing framework.
+ */
+void unittest_tear_down(void);
+
+/*
+ * Runs all the tests.
+ */
+int unittest_run_all(struct unittest_opts *opts);
+
+/*
+ * Prints all the results.
+ */
+void unittest_print_all(int level);
+
+/*
  * Returns the default testing options -1 (no timeout) and UNITTEST_DEFAULT.
  */
-unittest_opts_t unittest_opts_default(void);
+struct unittest_opts unittest_opts_default(void);
 
 /*
  * Destroys the UnittestResult and all of its resources.
@@ -76,7 +106,7 @@ void unittest_result_fail(UnittestResult *result, const char *fmt, ...);
  * Precoditions:
  * - UnittestResult is a test result
  */
-void unittest_result_err(UnittestResult *result, const char *fmt, ...);
+void unittest_result_error(UnittestResult *result, const char *fmt, ...);
 
 /*
  * Creates a new test with the given name and unittest function. Returns
@@ -98,13 +128,18 @@ void unittest_destroy(Unittest *ut);
 /*
  * Returns the name of the Unittest.
  */
-const char *unittest_get_name(Unittest *ut);
+const char *unittest_get_name(const Unittest *ut);
 
 /*
  * Creates a new test and adds it to the suite. Returns 0 on success, and -1
  * on failure.
  */
 int unittest_add_test(Unittest *suite, const char *name, unittest_fn fn);
+
+/*
+ * Adds a dependency between tests.
+ */
+int unittest_add_dependency(Unittest *from, Unittest *to);
 
 /*
  * Runs the Unittest with the given run options. Returns a UnittestResult and
@@ -114,8 +149,7 @@ int unittest_add_test(Unittest *suite, const char *name, unittest_fn fn);
  * Preconditions:
  * - ut must not be NULL
  */
-UnittestResult *unittest_run(const Unittest *ut,
-			     const unittest_opts_t *run_opts, int *status);
+UnittestResult *unittest_run(Unittest *ut, const struct unittest_opts *opts);
 
 /*
  * Prints the Unittest and its UnittestResult at the given verbosity level.
@@ -125,7 +159,7 @@ UnittestResult *unittest_run(const Unittest *ut,
  * - result must not be NULL
  * - ut and result types match (both tests or both suites)
  */
-void unittest_print_result(const Unittest *ut, const UnittestResult *result,
-			   unittest_verbosity_t level);
+void unittest_print_result(const Unittest *ut,
+						   const UnittestResult *result, int level);
 
 #endif

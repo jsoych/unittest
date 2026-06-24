@@ -9,48 +9,69 @@
 
 #define CAPACITY 8
 
-struct Suite {
+struct Suite
+{
 	char *name;
 	int size;
 	int capacity;
 	Test **tests;
 };
 
-int suite_result_init(suite_result_t *result, int size)
+int suite_result_init(struct suite_result *result, int size)
 {
 	result->nok = 0;
 	result->nfail = 0;
 	result->nerror = 0;
 	result->nsyserr = 0;
 	result->time_ms = 0;
-	if ((result->size = size) == 0) {
+
+	if ((result->size = size) == 0)
+	{
 		result->test_results = NULL;
 		return 0;
 	}
-	result->test_results = malloc(size * sizeof(test_result_t));
-	if (!result->test_results) {
+
+	result->test_results = malloc(size * sizeof(struct test_result));
+	if (!result->test_results)
+	{
 		PRINT_SYSERR("malloc", errno);
 		return -1;
 	}
+
 	return 0;
 }
 
-void suite_result_free(suite_result_t *result)
+void suite_result_free(struct suite_result *result)
 {
 	if (result->test_results)
 		free(result->test_results);
 	suite_result_init(result, 0);
 }
 
+int suite_result_status(const struct suite_result *result)
+{
+	if (result->nsyserr > 0)
+		return UNITTEST_SYSERR;
+	else if (result->nerror > 0)
+		return UNITTEST_ERROR;
+	else if (result->nfail > 0)
+		return UNITTEST_FAIL;
+	else
+		return UNITTEST_OK;
+	return -1;
+}
+
 Suite *suite_create(const char *name)
 {
 	Suite *suite = malloc(sizeof(Suite));
-	if (!suite) {
+	if (!suite)
+	{
 		PRINT_SYSERR("malloc", errno);
 		return NULL;
 	}
 	suite->name = strdup(name);
-	if (!suite->name) {
+	if (!suite->name)
+	{
 		PRINT_SYSERR("strdup", errno);
 		free(suite);
 		return NULL;
@@ -58,7 +79,8 @@ Suite *suite_create(const char *name)
 	suite->size = 0;
 	suite->capacity = CAPACITY;
 	suite->tests = calloc(CAPACITY, sizeof(Test *));
-	if (!suite->tests) {
+	if (!suite->tests)
+	{
 		PRINT_SYSERR("calloc", errno);
 		free(suite->name);
 		free(suite);
@@ -74,27 +96,31 @@ void suite_destroy(Suite *suite)
 	if (!suite)
 		return;
 	free(suite->name);
-	for (int i = 0; i < suite->size; i++) {
+	for (int i = 0; i < suite->size; i++)
+	{
 		test_destroy(suite->tests[i]);
 	}
 	free(suite);
 }
 
-const char *suite_get_name(Suite *suite)
+const char *suite_get_name(const Suite *suite)
 {
 	return suite->name;
 }
 
 int suite_add(Suite *suite, Test *test)
 {
-	if (suite->size == suite->capacity) {
+	if (suite->size == suite->capacity)
+	{
 		int capacity = 2 * suite->capacity;
 		Test **tests = realloc(suite->tests, capacity * sizeof(Test *));
-		if (!tests) {
+		if (!tests)
+		{
 			PRINT_SYSERR("malloc", errno);
 			return -1;
 		}
-		for (int i = suite->size; i < capacity; i++) {
+		for (int i = suite->size; i < capacity; i++)
+		{
 			tests[i] = NULL;
 		}
 		suite->capacity = capacity;
@@ -104,8 +130,8 @@ int suite_add(Suite *suite, Test *test)
 	return 0;
 }
 
-int suite_run(const Suite *suite, suite_result_t *result,
-	      const unittest_opts_t *run_opts)
+int suite_run(const Suite *suite, struct suite_result *result,
+			  const struct unittest_opts *run_opts)
 {
 	if (!suite || !result)
 		return -1;
@@ -113,21 +139,24 @@ int suite_run(const Suite *suite, suite_result_t *result,
 		return -1;
 
 	int rv = 0;
-	for (int i = 0; i < suite->size; i++) {
+	for (int i = 0; i < suite->size; i++)
+	{
 		if (test_run(suite->tests[i], &result->test_results[i],
-			     run_opts) == -1) {
+					 run_opts) == -1)
+		{
 			result->nsyserr++;
 			rv = -1;
 			continue;
 		}
-		switch (result->test_results[i].status) {
-		case TEST_OK:
+		switch (result->test_results[i].status)
+		{
+		case UNITTEST_OK:
 			result->nok++;
 			break;
-		case TEST_FAIL:
+		case UNITTEST_FAIL:
 			result->nfail++;
 			break;
-		case TEST_ERROR:
+		case UNITTEST_ERROR:
 			result->nerror++;
 			break;
 		default:
@@ -139,49 +168,97 @@ int suite_run(const Suite *suite, suite_result_t *result,
 	return rv;
 }
 
-static void print_summary(const suite_result_t *result)
+static const char *result_to_str(const struct suite_result *result)
 {
-	printf("\nRan %d tests in %.3fs\n\n", result->size,
-	       (double)(result->time_ms / 1000));
-
-	if (result->nfail > 0 || result->nerror > 0 || result->nsyserr > 0) {
-		printf("FAILED (");
-		if (result->nfail)
-			printf("failures=%d", result->nfail);
-		if (result->nfail && result->nerror)
-			printf(", ");
-		if (result->nerror)
-			printf("errors=%d", result->nerror);
-		if ((result->nfail > 0 || result->nerror > 0) &&
-		    result->nsyserr)
-			printf(", ");
-		if (result->nsyserr)
-			printf("syserrs=%d", result->nsyserr);
-		printf(")\n");
-		return;
+	if (result->nsyserr > 0)
+	{
+		return "SYSERR";
 	}
-
-	printf("OK\n");
+	else if (result->nerror > 0)
+	{
+		return "ERROR";
+	}
+	else if (result->nfail > 0)
+	{
+		return "FAILED";
+	}
+	else
+	{
+		return "OK";
+	}
 }
 
-void suite_print_result(const Suite *suite, const suite_result_t *result,
-			const unittest_verbosity_t level)
+void print_banner(const Suite *suite)
 {
-	if (!suite || !result)
-		return;
+	const char *name = suite_get_name(suite);
 
-	if (level == UNITTEST_QUIET) {
-		printf(HLINE);
-		print_summary(result);
-		return;
-	}
+	int width = 70;
+	int len = (int)strlen(name);
 
 	printf(DLINE);
-	print_summary(result);
-	for (int i = 0; i < result->size; i++) {
-		if (result->test_results[i].status == TEST_OK)
-			continue;
-		test_print_result(suite->tests[i], &result->test_results[i],
-				  level);
+	putchar('\n');
+
+	if (len >= width)
+	{
+		printf("%s\n", name);
 	}
+	else
+	{
+		int padding = (width - len) / 2;
+		for (int i = 0; i < padding; i++)
+		{
+			putchar(' ');
+		}
+		printf("%s", name);
+	}
+}
+
+static void print_summary(const struct suite_result *result)
+{
+	printf(DLINE);
+	printf("\nRan %d tests in %.3fs", result->size,
+		   (double)(result->time_ms / 1000));
+
+	printf("\n\n%s (", result_to_str(result));
+	int comma = 0;
+	if (result->nok)
+	{
+		printf("ok=%d", result->nok);
+		comma = 1;
+	}
+	if (result->nfail)
+	{
+		printf("%sfailures=%d", comma ? ", " : "", result->nfail);
+		comma = 1;
+	}
+	if (result->nerror)
+	{
+		printf("%serrors=%d", comma ? ", " : "", result->nerror);
+		comma = 1;
+	}
+	if (result->nsyserr)
+	{
+		printf("%ssyserrs=%d", comma ? ", " : "", result->nsyserr);
+		comma = 1;
+	}
+	printf(")");
+}
+
+void suite_print_result(const Suite *suite, const struct suite_result *result, int level)
+{
+	if (level == UNITTEST_QUIET)
+		return;
+
+	/* Print suite banner */
+	print_banner(suite);
+
+	/* Print test results */
+	for (int i = 0; i < result->size; i++)
+	{
+		test_print_result(suite->tests[i], &result->test_results[i],
+						  level);
+	}
+
+	/* Print result summary */
+	print_summary(result);
 }

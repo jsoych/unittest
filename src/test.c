@@ -18,13 +18,15 @@
 #define READ 0
 #define WRITE 1
 
-struct Test {
+struct Test
+{
 	char *name;
 	unittest_fn fn;
 };
 
 // Ring buffer
-struct ring_buffer {
+struct ring_buffer
+{
 	int start;
 	int size;
 	char buf[BUFSIZE];
@@ -32,7 +34,8 @@ struct ring_buffer {
 
 // Wire format: [u8 status][u32 msg_len][msg bytes...]
 // msg_len does NOT include a NUL terminator.
-typedef struct __attribute__((packed)) {
+typedef struct __attribute__((packed))
+{
 	uint8_t status;
 	uint32_t time_ms;
 	uint32_t msg_len;
@@ -74,13 +77,17 @@ static void ring_buf_init(struct ring_buffer *rb)
 // ring_buf_write: Writes to ring buffer.
 static void ring_buf_write(struct ring_buffer *rb, const char *data, size_t n)
 {
-	for (size_t i = 0; i < n; i++) {
+	for (size_t i = 0; i < n; i++)
+	{
 		size_t end = (rb->start + rb->size) % BUFSIZE;
 		rb->buf[end] = data[i];
 
-		if (rb->size < BUFSIZE) {
+		if (rb->size < BUFSIZE)
+		{
 			rb->size++;
-		} else {
+		}
+		else
+		{
 			// Buffer full, overwrite oldest
 			rb->start = (rb->start + 1) % BUFSIZE;
 		}
@@ -90,7 +97,8 @@ static void ring_buf_write(struct ring_buffer *rb, const char *data, size_t n)
 // ring_buf_read: Reads from ring buffer.
 static void ring_buf_read(struct ring_buffer *rb, char *out)
 {
-	for (int i = 0; i < rb->size; i++) {
+	for (int i = 0; i < rb->size; i++)
+	{
 		out[i] = rb->buf[(rb->start + i) % BUFSIZE];
 	}
 	out[rb->size] = '\0';
@@ -102,7 +110,8 @@ static char *ring_buf_to_str(struct ring_buffer *rb)
 	if (rb->size == 0)
 		return NULL;
 	char *s = malloc((rb->size + 1) * sizeof(char));
-	if (!s) {
+	if (!s)
+	{
 		PRINT_SYSERR("malloc", errno);
 		return NULL;
 	}
@@ -116,13 +125,16 @@ static char *ring_buf_to_str(struct ring_buffer *rb)
 static int ring_buf_drain_nb(struct ring_buffer *rb, int fd)
 {
 	char buf[BUFSIZE];
-	for (;;) {
+	for (;;)
+	{
 		ssize_t n = read(fd, buf, sizeof(buf));
-		if (n > 0) {
+		if (n > 0)
+		{
 			ring_buf_write(rb, buf, (size_t)n);
 			continue;
 		}
-		if (n == 0) {
+		if (n == 0)
+		{
 			return 0; // EOF
 		}
 		if (errno == EINTR)
@@ -136,9 +148,11 @@ static int ring_buf_drain_nb(struct ring_buffer *rb, int fd)
 static int write_all(int fd, const void *buf, size_t n)
 {
 	const uint8_t *p = (const uint8_t *)buf;
-	while (n > 0) {
+	while (n > 0)
+	{
 		ssize_t w = write(fd, p, n);
-		if (w < 0) {
+		if (w < 0)
+		{
 			if (errno == EINTR)
 				continue;
 			return -1;
@@ -152,12 +166,14 @@ static int write_all(int fd, const void *buf, size_t n)
 static int read_all(int fd, void *buf, size_t n)
 {
 	uint8_t *p = (uint8_t *)buf;
-	while (n > 0) {
+	while (n > 0)
+	{
 		ssize_t r = read(fd, p, n);
 		if (r == 0)
 			return -1;
 		// EOF before full read
-		if (r < 0) {
+		if (r < 0)
+		{
 			if (errno == EINTR)
 				continue;
 			return -1;
@@ -169,7 +185,7 @@ static int read_all(int fd, void *buf, size_t n)
 }
 
 // Send result to fd. Returns 0 on success, -1 on write_all error.
-static int send_test_result(int fd, const test_result_t *r)
+static int send_test_result(int fd, const struct test_result *r)
 {
 	if (!r)
 		return -1;
@@ -191,7 +207,7 @@ static int send_test_result(int fd, const test_result_t *r)
 }
 
 // Receive result from fd. Return 0 on sucess, -1 on read_all error.
-static int recv_test_result(int fd, test_result_t *r)
+static int recv_test_result(int fd, struct test_result *r)
 {
 	if (!r)
 		return -1;
@@ -205,10 +221,11 @@ static int recv_test_result(int fd, test_result_t *r)
 	if (hdr.msg_len > MAX_MSG)
 		return -1;
 
-	r->status = (test_status_t)hdr.status;
+	r->status = (int)hdr.status;
 	r->time_ms = (long long)hdr.time_ms;
 
-	if (hdr.msg_len == 0) {
+	if (hdr.msg_len == 0)
+	{
 		r->msg = NULL;
 		return 0;
 	}
@@ -217,7 +234,8 @@ static int recv_test_result(int fd, test_result_t *r)
 	if (!r->msg)
 		return -1;
 
-	if (read_all(fd, r->msg, hdr.msg_len) == -1) {
+	if (read_all(fd, r->msg, hdr.msg_len) == -1)
+	{
 		free(r->msg);
 		r->msg = NULL;
 		return -1;
@@ -226,41 +244,43 @@ static int recv_test_result(int fd, test_result_t *r)
 	return 0;
 }
 
-static char test_status_to_char(test_status_t status)
+static char into_char(int status)
 {
-	switch (status) {
-	case TEST_OK:
+	switch (status)
+	{
+	case UNITTEST_OK:
 		return '.';
-	case TEST_FAIL:
+	case UNITTEST_FAIL:
 		return 'F';
-	case TEST_ERROR:
+	case UNITTEST_ERROR:
 		return 'E';
-	case TEST_SYSERR:
+	case UNITTEST_SYSERR:
 		return 'S';
 	default:
 		return 'U';
 	}
 }
 
-const char *test_status_to_str(test_status_t status)
+const char *into_str(int status)
 {
-	switch (status) {
-	case TEST_OK:
-		return "ok";
-	case TEST_FAIL:
+	switch (status)
+	{
+	case UNITTEST_OK:
+		return "OK";
+	case UNITTEST_FAIL:
 		return "FAIL";
-	case TEST_ERROR:
+	case UNITTEST_ERROR:
 		return "ERROR";
-	case TEST_SYSERR:
+	case UNITTEST_SYSERR:
 		return "SYSERR";
 	default:
 		return "UNKNOWN";
 	}
 }
 
-int test_result_init(test_result_t *result)
+int test_result_init(struct test_result *result)
 {
-	result->status = TEST_ERROR;
+	result->status = UNITTEST_ERROR;
 	result->msg = NULL;
 	result->out = NULL;
 	result->err = NULL;
@@ -271,7 +291,7 @@ int test_result_init(test_result_t *result)
 	return 0;
 }
 
-void test_result_free(test_result_t *result)
+void test_result_free(struct test_result *result)
 {
 	if (result->msg)
 		free(result->msg);
@@ -285,7 +305,8 @@ void test_result_free(test_result_t *result)
 Test *test_create(const char *name, unittest_fn fn)
 {
 	Test *test = malloc(sizeof(Test));
-	if (!test) {
+	if (!test)
+	{
 		PRINT_SYSERR("malloc", errno);
 		return NULL;
 	}
@@ -307,44 +328,46 @@ const char *test_get_name(const Test *test)
 	return test->name ? test->name : "";
 }
 
-static int status_is_valid(test_status_t s)
+static int status_is_valid(int s)
 {
-	return s == TEST_OK || s == TEST_FAIL || s == TEST_ERROR;
+	return s == UNITTEST_OK || s == UNITTEST_FAIL || s == UNITTEST_ERROR;
 }
 
-static void print_name(const char *name, unittest_verbosity_t l)
+static void print_name(const char *name, int level)
 {
-	if (l == UNITTEST_VERBOSE) {
-		printf("%s ... ", name);
+	if (level >= UNITTEST_VERBOSE)
+	{
+		printf("\n%s ... ", name);
 	}
 }
 
-static void print_status(test_status_t s, unittest_verbosity_t l)
+static void print_status(int s, int l)
 {
-	if (l == UNITTEST_VERBOSE) {
-		printf("%s\n", test_status_to_str(s));
+	if (l >= UNITTEST_VERBOSE)
+	{
+		printf("%s", into_str(s));
 		return;
 	}
-	putchar(test_status_to_char(s));
+	putchar(into_char(s));
 }
 
-int test_run(const Test *test, test_result_t *result,
-	     const unittest_opts_t *run_opts)
+int test_run(const Test *test, struct test_result *result,
+			 const struct unittest_opts *opts)
 {
 	if (!test || !test->fn || !result)
 		return -1;
 
 	if (test_result_init(result) == -1)
 		return -1;
-	unittest_opts_t opts = (run_opts) ? *run_opts : unittest_opts_default();
-	print_name(test->name, opts.level);
+	struct unittest_opts run_opts = opts ? *opts : unittest_opts_default();
+	print_name(test->name, run_opts.level);
 	fflush(stdout); /* flush printf buffer */
 
 	int rc = -1;
 
-	int stdout_pipe[2] = { -1, -1 };
-	int stderr_pipe[2] = { -1, -1 };
-	int result_pipe[2] = { -1, -1 };
+	int stdout_pipe[2] = {-1, -1};
+	int stderr_pipe[2] = {-1, -1};
+	int result_pipe[2] = {-1, -1};
 
 	pid_t child_id = -1;
 	int status = 0;
@@ -352,26 +375,31 @@ int test_run(const Test *test, test_result_t *result,
 	int want_kill = 0;
 
 	// --- create pipes
-	if (pipe(stdout_pipe) == -1) {
+	if (pipe(stdout_pipe) == -1)
+	{
 		result->sys_errno = errno;
 		goto syserr;
 	}
-	if (pipe(stderr_pipe) == -1) {
+	if (pipe(stderr_pipe) == -1)
+	{
 		result->sys_errno = errno;
 		goto syserr;
 	}
-	if (pipe(result_pipe) == -1) {
+	if (pipe(result_pipe) == -1)
+	{
 		result->sys_errno = errno;
 		goto syserr;
 	}
 
 	child_id = fork();
-	if (child_id == -1) {
+	if (child_id == -1)
+	{
 		result->sys_errno = errno;
 		goto syserr;
 	}
 
-	if (child_id == 0) {
+	if (child_id == 0)
+	{
 		// child
 		close(stdout_pipe[READ]);
 		close(stderr_pipe[READ]);
@@ -385,7 +413,7 @@ int test_run(const Test *test, test_result_t *result,
 
 		setbuf(stdout, NULL);
 
-		test_result_t r;
+		struct test_result r;
 		(void)test_result_init(&r);
 		r.time_ms = 0 - now_ms();
 		test->fn((UnittestResult *)&r);
@@ -406,7 +434,8 @@ int test_run(const Test *test, test_result_t *result,
 	result_pipe[WRITE] = -1;
 
 	if (set_nonblocking(stdout_pipe[READ]) == -1 ||
-	    set_nonblocking(stderr_pipe[READ]) == -1) {
+		set_nonblocking(stderr_pipe[READ]) == -1)
+	{
 		result->sys_errno = errno;
 		goto syserr;
 	}
@@ -416,20 +445,22 @@ int test_run(const Test *test, test_result_t *result,
 	ring_buf_init(&stderr_rb);
 
 	int out_open = 1, err_open = 1;
-	long long deadline = (opts.timeout_ms >= 0) ?
-				     (now_ms() + (long long)opts.timeout_ms) :
-				     0;
+	long long deadline =
+		(run_opts.timeout_ms >= 0) ? (now_ms() + (long long)run_opts.timeout_ms) : 0;
 
-	while ((!child_done) || out_open || err_open) {
+	while ((!child_done) || out_open || err_open)
+	{
 		int remaining = -1;
-		if (opts.timeout_ms >= 0) {
+		if (run_opts.timeout_ms >= 0)
+		{
 			remaining = (int)(deadline - now_ms());
-			if (remaining <= 0) {
+			if (remaining <= 0)
+			{
 				want_kill = 1;
 				kill(child_id, SIGKILL);
 				if (!result->msg)
 					result->msg = strdup("timeout");
-				result->status = TEST_ERROR;
+				result->status = UNITTEST_ERROR;
 				remaining = 0;
 			}
 		}
@@ -438,19 +469,22 @@ int test_run(const Test *test, test_result_t *result,
 		int nfds = 0;
 		int out_idx = -1, err_idx = -1;
 
-		if (out_open) {
+		if (out_open)
+		{
 			out_idx = nfds;
-			pfds[nfds++] = (struct pollfd){ .fd = stdout_pipe[READ],
-							.events = POLLIN };
+			pfds[nfds++] = (struct pollfd){.fd = stdout_pipe[READ],
+										   .events = POLLIN};
 		}
-		if (err_open) {
+		if (err_open)
+		{
 			err_idx = nfds;
-			pfds[nfds++] = (struct pollfd){ .fd = stderr_pipe[READ],
-							.events = POLLIN };
+			pfds[nfds++] = (struct pollfd){.fd = stderr_pipe[READ],
+										   .events = POLLIN};
 		}
 
 		int prc = (nfds > 0) ? poll(pfds, nfds, remaining) : 0;
-		if (prc == -1) {
+		if (prc == -1)
+		{
 			if (errno == EINTR)
 				continue;
 			result->sys_errno = errno;
@@ -458,14 +492,16 @@ int test_run(const Test *test, test_result_t *result,
 			goto syserr;
 		}
 
-		if (out_open && out_idx != -1) {
+		if (out_open && out_idx != -1)
+		{
 			short re = pfds[out_idx].revents;
 			if (re & POLLIN)
 				(void)ring_buf_drain_nb(&stdout_rb,
-							stdout_pipe[READ]);
-			if (re & (POLLHUP | POLLERR)) {
+										stdout_pipe[READ]);
+			if (re & (POLLHUP | POLLERR))
+			{
 				(void)ring_buf_drain_nb(&stdout_rb,
-							stdout_pipe[READ]);
+										stdout_pipe[READ]);
 				close(stdout_pipe[READ]);
 				stdout_pipe[READ] = -1;
 				out_open = 0;
@@ -474,14 +510,16 @@ int test_run(const Test *test, test_result_t *result,
 				out_open = 0;
 		}
 
-		if (err_open && err_idx != -1) {
+		if (err_open && err_idx != -1)
+		{
 			short re = pfds[err_idx].revents;
 			if (re & POLLIN)
 				(void)ring_buf_drain_nb(&stderr_rb,
-							stderr_pipe[READ]);
-			if (re & (POLLHUP | POLLERR)) {
+										stderr_pipe[READ]);
+			if (re & (POLLHUP | POLLERR))
+			{
 				(void)ring_buf_drain_nb(&stderr_rb,
-							stderr_pipe[READ]);
+										stderr_pipe[READ]);
 				close(stderr_pipe[READ]);
 				stderr_pipe[READ] = -1;
 				err_open = 0;
@@ -491,9 +529,11 @@ int test_run(const Test *test, test_result_t *result,
 		}
 
 		// Reap child if finished
-		if (!child_done) {
+		if (!child_done)
+		{
 			pid_t w = waitpid(child_id, &status, WNOHANG);
-			if (w == -1) {
+			if (w == -1)
+			{
 				result->sys_errno = errno;
 				want_kill = 1;
 				goto syserr;
@@ -512,36 +552,43 @@ int test_run(const Test *test, test_result_t *result,
 		(recv_test_result(result_pipe[READ], result) != -1) ? 1 : 0;
 
 	// Final status from wait status
-	if (WIFSIGNALED(status)) {
+	if (WIFSIGNALED(status))
+	{
 		result->signo = WTERMSIG(status);
-		result->status = TEST_ERROR;
+		result->status = UNITTEST_ERROR;
 		if (!result->msg)
 			result->msg = strdup("terminated by signal");
-	} else if (WIFEXITED(status)) {
+	}
+	else if (WIFEXITED(status))
+	{
 		result->exit_code = WEXITSTATUS(status);
-		if (!have_wire || !status_is_valid(result->status)) {
-			result->status = TEST_ERROR;
+		if (!have_wire || !status_is_valid(result->status))
+		{
+			result->status = UNITTEST_ERROR;
 			if (!result->msg)
 				result->msg = strdup("no result from test");
 		}
-	} else {
+	}
+	else
+	{
 		result->sys_errno = 0;
 		goto syserr;
 	}
 
-	print_status(result->status, opts.level);
+	print_status(result->status, run_opts.level);
 	rc = 0;
 	goto cleanup;
 
 syserr:
-	result->status = TEST_SYSERR;
+	result->status = UNITTEST_SYSERR;
 	if (result->sys_errno == 0)
 		result->sys_errno = errno;
-	print_status(result->status, opts.level);
+	print_status(result->status, run_opts.level);
 	rc = -1;
 
 cleanup:
-	if (child_id > 0 && want_kill) {
+	if (child_id > 0 && want_kill)
+	{
 		kill(child_id, SIGKILL);
 		(void)waitpid(child_id, NULL, 0);
 	}
@@ -553,33 +600,44 @@ cleanup:
 	return rc;
 }
 
-void test_print_result(const Test *test, const test_result_t *result,
-		       const unittest_verbosity_t level)
+static void print_result(const Test *test, const struct test_result *result)
 {
-	if (!test || !result)
-		return;
+	printf("\n%s: %s", into_str(result->status),
+		   test_get_name(test));
+}
+
+void test_print_result(const Test *test, const struct test_result *result,
+					   const int level)
+{
 	if (level == UNITTEST_QUIET)
 		return;
+
 	printf(DLINE);
-	printf("\n%s: %s", test_status_to_str(result->status),
-	       test_get_name(test));
-	if (result->msg) {
+	print_result(test, result);
+
+	if (result->msg)
+	{
 		printf(HLINE);
 		printf("\nmsg: %s", result->msg);
 	}
-	if (result->out) {
-		printf(HLINE);
-		printf("\nstdout: %s", result->out);
-	}
-	if (result->err) {
-		printf(HLINE);
-		printf("\nstderr: %s", result->err);
+
+	if (level >= UNITTEST_VERBOSE)
+	{
+		if (level >= UNITTEST_VERBOSE && result->out)
+		{
+			printf(HLINE);
+			printf("\nstdout: %s", result->out);
+		}
+		if (level >= UNITTEST_VERBOSE && result->err)
+		{
+			printf(HLINE);
+			printf("\nstderr: %s", result->err);
+		}
 	}
 
-	if (level == UNITTEST_VERBOSE && (result->status >= TEST_ERROR)) {
-		if (result->exit_code > 0 || result->sys_errno > 0 ||
-		    result->signo > 0)
-			printf(HLINE);
+	if (level >= UNITTEST_DEBUG)
+	{
+		printf(HLINE);
 		if (result->exit_code < 0xff)
 			printf("\nexit code: 0x%02x", result->exit_code);
 		if (result->sys_errno)
@@ -588,9 +646,9 @@ void test_print_result(const Test *test, const test_result_t *result,
 			printf("\nsignal: %s", strsignal(result->signo));
 	}
 
-	if (level == UNITTEST_VERBOSE)
-		printf("\n\nRan test in %.03fs\n",
-		       (double)result->time_ms / 1000.0f);
+	if (level >= UNITTEST_VERBOSE)
+		printf("\n\nRan test in %.03fs",
+			   (double)result->time_ms / 1000.0f);
 }
 
 #undef READ
